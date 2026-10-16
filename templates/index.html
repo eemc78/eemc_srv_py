@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ciudad 3D - Visualización de archivos por rangos</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 100;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+            border-left: 5px solid #00ffff;
+        }
+        #controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 30, 0.85);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 50px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            z-index: 200;
+            backdrop-filter: blur(8px);
+            border: 1px solid #00aaff;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.7);
+        }
+        #controls input {
+            padding: 10px 15px;
+            border-radius: 25px;
+            border: none;
+            width: 300px;
+            background: #2a2a3a;
+            color: white;
+            font-size: 14px;
+            outline: none;
+            border: 1px solid #00aaff;
+        }
+        #controls button {
+            padding: 10px 25px;
+            border-radius: 25px;
+            border: none;
+            background: #00aaff;
+            color: black;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+        }
+        #controls button:hover {
+            background: #00ddff;
+            transform: scale(1.02);
+            box-shadow: 0 0 15px #00aaff;
+        }
+        #status {
+            margin-left: 15px;
+            color: #aaa;
+            font-size: 13px;
+        }
+        #file-detail {
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            width: 280px;
+            background: rgba(10, 20, 30, 0.9);
+            color: white;
+            border-radius: 12px;
+            padding: 18px;
+            backdrop-filter: blur(10px);
+            border: 1px solid #00aaff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            z-index: 300;
+            display: none;
+            pointer-events: none;
+        }
+        #file-detail h3 {
+            margin: 0 0 10px 0;
+            color: #00ffff;
+            border-bottom: 1px solid #00aaff;
+            padding-bottom: 8px;
+        }
+        #file-detail p {
+            margin: 8px 0;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        #file-detail .label {
+            color: #88ddff;
+            font-weight: 500;
+        }
+        .instruction {
+            position: absolute;
+            bottom: 100px;
+            left: 20px;
+            color: rgba(255,255,255,0.6);
+            font-size: 12px;
+            background: rgba(0,0,0,0.4);
+            padding: 8px 15px;
+            border-radius: 20px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        🚁 Dron sobre la ciudad de archivos | Rangos 1-10 según tamaño
+    </div>
+    <div id="controls">
+        <input type="text" id="rutaInput" placeholder="Ej: /home/usuario/archivos o C:\\Users\\... (simulado)" value="/datos/archivos">
+        <button id="cargarBtn">Volar sobre la ciudad</button>
+        <span id="status">Listo</span>
+    </div>
+    <div id="file-detail">
+        <h3 id="detail-name">—</h3>
+        <p><span class="label">Rango:</span> <span id="detail-rango">—</span></p>
+        <p><span class="label">Tamaño:</span> <span id="detail-tamano">—</span></p>
+        <p><span class="label">Rango (1-10):</span> <span id="detail-nivel">—</span></p>
+        <p><span class="label">Coordenadas:</span> <span id="detail-coords">—</span></p>
+    </div>
+    <div class="instruction">🖱️ Click en un edificio para ver detalles | Arrastra para rotar | Rueda para zoom</div>
+
+    <!-- Three.js y OrbitControls desde CDN -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Configuración inicial ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a20);
+        scene.fog = new THREE.FogExp2(0x0a0a20, 0.0025);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+        camera.position.set(60, 70, 120);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.shadowMap.bias = 0.0001;
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.8;
+        controls.maxPolarAngle = Math.PI / 2.3;
+        controls.minDistance = 20;
+        controls.maxDistance = 300;
+        controls.target.set(0, 10, 0);
+
+        // --- Luces ---
+        // Luz ambiental
+        const ambientLight = new THREE.AmbientLight(0x404060);
+        scene.add(ambientLight);
+
+        // Luz solar direccional
+        const sunLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+        sunLight.position.set(80, 150, 50);
+        sunLight.castShadow = true;
+        sunLight.receiveShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        const d = 200;
+        sunLight.shadow.camera.left = -d;
+        sunLight.shadow.camera.right = d;
+        sunLight.shadow.camera.top = d;
+        sunLight.shadow.camera.bottom = -d;
+        sunLight.shadow.camera.near = 1;
+        sunLight.shadow.camera.far = 400;
+        sunLight.shadow.bias = -0.0005;
+        scene.add(sunLight);
+
+        // Luz de relleno
+        const fillLight = new THREE.PointLight(0x4466ff, 0.5);
+        fillLight.position.set(-50, 40, 50);
+        scene.add(fillLight);
+
+        // Luces puntuales de colores para ambiente urbano
+        const cityLight1 = new THREE.PointLight(0xffaa00, 0.4, 150);
+        cityLight1.position.set(30, 20, 30);
+        scene.add(cityLight1);
+        const cityLight2 = new THREE.PointLight(0x00aaff, 0.4, 150);
+        cityLight2.position.set(-40, 25, -30);
+        scene.add(cityLight2);
+
+        // --- Utilidades ---
+        const fileDetails = {};
+
+        // Genera un nombre de archivo aleatorio
+        function randomFileName() {
+            const names = ['documento', 'imagen', 'video', 'backup', 'base_datos', 'log', 'presentacion', 'audio', 'proyecto', 'reporte', 'config', 'script', 'dataset', 'render', 'captura', 'notas', 'planilla', 'manual', 'tutorial', 'codigo'];
+            const exts = ['.pdf', '.jpg', '.mp4', '.zip', '.sql', '.log', '.pptx', '.mp3', '.c', '.py', '.js', '.html', '.css', '.json', '.xml', '.csv', '.txt', '.md', '.bak', '.iso'];
+            const name = names[Math.floor(Math.random() * names.length)];
+            const ext = exts[Math.floor(Math.random() * exts.length)];
+            const num = Math.floor(Math.random() * 1000);
+            return `${name}_${num}${ext}`;
+        }
+
+        // Genera tamaño en bytes coherente con el rango (1-10)
+        function generateSizeForRange(rango) {
+            // Rango 1: 0-1 MB
+            // Rango 2: >1MB - 5MB
+            // Rango 3: >5MB - 50MB
+            // Rango 4: >50MB - 500MB
+            // Rango 5: >500MB - 1GB
+            // Rango 6: >1GB - 5GB
+            // Rango 7: >5GB - 50GB
+            // Rango 8: >50GB - 500GB
+            // Rango 9: >500GB - 1TB
+            // Rango 10: >1TB
+            let minBytes, maxBytes;
+            switch(rango) {
+                case 1: minBytes = 0; maxBytes = 1 * 1024 * 1024; break;
+                case 2: minBytes = 1 * 1024 * 1024 + 1; maxBytes = 5 * 1024 * 1024; break;
+                case 3: minBytes = 5 * 1024 * 1024 + 1; maxBytes = 50 * 1024 * 1024; break;
+                case 4: minBytes = 50 * 1024 * 1024 + 1; maxBytes = 500 * 1024 * 1024; break;
+                case 5: minBytes = 500 * 1024 * 1024 + 1; maxBytes = 1024 * 1024 * 1024; break;
+                case 6: minBytes = 1024 * 1024 * 1024 + 1; maxBytes = 5 * 1024 * 1024 * 1024; break;
+                case 7: minBytes = 5 * 1024 * 1024 * 1024 + 1; maxBytes = 50 * 1024 * 1024 * 1024; break;
+                case 8: minBytes = 50 * 1024 * 1024 * 1024 + 1; maxBytes = 500 * 1024 * 1024 * 1024; break;
+                case 9: minBytes = 500 * 1024 * 1024 * 1024 + 1; maxBytes = 1024 * 1024 * 1024 * 1024; break;
+                case 10: minBytes = 1024 * 1024 * 1024 * 1024 + 1; maxBytes = 5 * 1024 * 1024 * 1024 * 1024; break;
+                default: minBytes = 0; maxBytes = 1024 * 1024;
+            }
+            // Para rango 1, si min=0, random entre 0 y max
+            if (rango === 1) {
+                return Math.floor(Math.random() * maxBytes);
+            }
+            return Math.floor(Math.random() * (maxBytes - minBytes)) + minBytes;
+        }
+
+        // Formatea bytes a texto legible
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Genera un color de edificio basado en el rango (1-10)
+        function getColorForRango(rango) {
+            const colors = [
+                0x4a6fa5, // 1 azul grisáceo
+                0x5a8f7b, // 2 verde azulado
+                0x8a7f5a, // 3 marrón claro
+                0x9e6b5e, // 4 terracota
+                0x7e5a8a, // 5 púrpura
+                0x4a8a9e, // 6 azul claro
+                0x9e8a4a, // 7 mostaza
+                0x6a5a8a, // 8 lavanda oscuro
+                0x8a4a5a, // 9 granate
+                0x3a6a8a  // 10 azul profundo
+            ];
+            return colors[(rango - 1) % colors.length];
+        }
+
+        // --- Generación de la ciudad ---
+        const cityGroup = new THREE.Group();
+        scene.add(cityGroup);
+
+        // Almacén de edificios para raycasting
+        const edificios = [];
+
+        // Tamaño de la ciudad en cuadras
+        const bloquesX = 6;
+        const bloquesZ = 6;
+
+        // Semilla para determinismo (opcional, pero usamos aleatorio normal)
+        // Para cada cuadra, generamos dimensiones X e Y (entre 4 y 8)
+        // Pero para simetría de calles, las calles son continuas: 
+        // Definimos un ancho de calle constante y tamaños de manzana variables.
+        // Para simplificar, generamos calles en una cuadrícula donde cada manzana tiene su propio tamaño,
+        // pero las calles son continuas porque los bordes de las manzanas se alinean.
+        // La idea: la ciudad se extiende desde -anchoTotal/2 a +anchoTotal/2.
+        // Cada manzana ocupa un área, y las calles son los espacios entre manzanas.
+        // Definimos que las calles tienen un ancho fijo, y las manzanas pueden tener diferentes dimensiones.
+        // Pero para que las calles sean simétricas y rectas, la cuadrícula de calles debe ser regular.
+        // Entonces: elegimos un ancho de calle fijo (streetWidth = 4 unidades).
+        // Para cada manzana, elegimos un tamaño en X y Z (entre 4 y 8 edificios).
+        // Pero para que las calles sean continuas, la posición de cada manzana debe ser tal que 
+        // las calles entre manzanas tengan el mismo ancho.
+        // Enfoque: generamos una lista de posiciones para las manzanas en X y Z.
+        // Para simplificar, haremos una cuadrícula donde cada manzana tiene un tamaño aleatorio entre 4 y 8,
+        // pero el espacio entre manzanas (calle) es fijo. Así las calles son continuas.
+        
+        // Parámetros:
+        const streetWidth = 3.0; // ancho de calle
+        const blockMinSize = 4;
+        const blockMaxSize = 8;
+        // Tamaño de cada edificio (base) 
+        const buildingBaseSize = 1.8; // para que quepan ventanas
+
+        // Primero generamos las dimensiones de cada manzana en X y Z
+        // Para que las calles sean continuas, la posición de cada manzana se acumula.
+        // Generamos arrays de tamaños de manzana en X y Z
+        const blockSizesX = [];
+        const blockSizesZ = [];
+        for (let i = 0; i < bloquesX; i++) {
+            blockSizesX.push(Math.floor(Math.random() * (blockMaxSize - blockMinSize + 1)) + blockMinSize);
+        }
+        for (let i = 0; i < bloquesZ; i++) {
+            blockSizesZ.push(Math.floor(Math.random() * (blockMaxSize - blockMinSize + 1)) + blockMinSize);
+        }
+
+        // Calculamos las posiciones de inicio de cada manzana en X y Z
+        // El centro de la ciudad estará en (0,0)
+        // Calculamos el ancho total
+        let totalWidthX = 0;
+        for (let size of blockSizesX) totalWidthX += size * buildingBaseSize;
+        totalWidthX += (bloquesX - 1) * streetWidth; // calles entre manzanas
+        // similar para Z
+        let totalWidthZ = 0;
+        for (let size of blockSizesZ) totalWidthZ += size * buildingBaseSize;
+        totalWidthZ += (bloquesZ - 1) * streetWidth;
+
+        // Posición inicial (esquina inferior izquierda)
+        let startX = -totalWidthX / 2;
+        let startZ = -totalWidthZ / 2;
+
+        // Almacenamos posiciones de las manzanas
+        const blockPositionsX = [];
+        let currentX = startX;
+        for (let i = 0; i < bloquesX; i++) {
+            const sizeInUnits = blockSizesX[i] * buildingBaseSize;
+            blockPositionsX.push({ start: currentX, end: currentX + sizeInUnits, size: blockSizesX[i] });
+            currentX += sizeInUnits + streetWidth;
+        }
+
+        const blockPositionsZ = [];
+        let currentZ = startZ;
+        for (let i = 0; i < bloquesZ; i++) {
+            const sizeInUnits = blockSizesZ[i] * buildingBaseSize;
+            blockPositionsZ.push({ start: currentZ, end: currentZ + sizeInUnits, size: blockSizesZ[i] });
+            currentZ += sizeInUnits + streetWidth;
+        }
+
+        // Colores para los bordes de las calles (por manzana)
+        const manzanaColors = [0xffaa00, 0x00ffaa, 0xff44aa, 0x44aaff, 0xaaff44, 0xff8844, 0xaa44ff, 0x44ffaa];
+
+        // Función para crear un edificio
+        function createBuilding(posX, posZ, rango, fileData, manzanaColor) {
+            // Altura basada en el rango (1-10) con pequeña variación
+            const baseHeight = rango * 1.8; // altura base
+            const variation = (Math.random() * 0.8) - 0.4; // -0.4 a +0.4
+            let height = baseHeight + variation;
+            // Aseguramos que no sea menor a 1.5
+            height = Math.max(1.5, height);
+            
+            // Ancho y profundidad del edificio (ligeramente variables)
+            const width = buildingBaseSize * (0.7 + Math.random() * 0.3);
+            const depth = buildingBaseSize * (0.7 + Math.random() * 0.3);
+            
+            // Color del edificio según rango
+            const color = getColorForRango(rango);
+            
+            // Material principal
+            const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1, emissive: new THREE.Color(0x000000) });
+            
+            // Cuerpo del edificio
+            const geometry = new THREE.BoxGeometry(width, height, depth);
+            const building = new THREE.Mesh(geometry, material);
+            building.castShadow = true;
+            building.receiveShadow = true;
+            building.position.set(posX, height / 2, posZ);
+            
+            // Guardar datos para raycasting
+            building.userData = {
+                isBuilding: true,
+                fileName: fileData.name,
+                rango: rango,
+                sizeBytes: fileData.size,
+                sizeFormatted: formatBytes(fileData.size),
+                coords: `(${posX.toFixed(1)}, ${posZ.toFixed(1)})`,
+                manzanaColor: manzanaColor
+            };
+            
+            // Añadir ventanas (como pequeños cubos o planos)
+            const windowMat = new THREE.MeshStandardMaterial({ color: 0xffdd88, emissive: new THREE.Color(0xffaa22), emissiveIntensity: 0.4 });
+            const windowMatOff = new THREE.MeshStandardMaterial({ color: 0x222233, emissive: new THREE.Color(0x000000) });
+            
+            const floors = Math.floor(height / 1.2);
+            const cols = Math.floor(width / 0.7);
+            const rows = Math.floor(depth / 0.7);
+            
+            // Distribuir ventanas en las 4 caras
+            // Cara frontal (z positivo)
+            for (let f = 0; f < floors; f++) {
+                for (let c = 0; c < cols; c++) {
+                    if (Math.random() > 0.65) continue; // algunas ventanas apagadas
+                    const wx = (c - (cols-1)/2) * 0.7;
+                    const wy = (f - (floors-1)/2) * 1.2;
+                    const wz = depth/2 + 0.05;
+                    const windowGeo = new THREE.BoxGeometry(0.25, 0.4, 0.1);
+                    const windowMesh = new THREE.Mesh(windowGeo, Math.random() > 0.7 ? windowMat : windowMatOff);
+                    windowMesh.position.set(wx, wy, wz);
+                    windowMesh.castShadow = false;
+                    windowMesh.receiveShadow = false;
+                    building.add(windowMesh);
+                }
+            }
+            // Cara trasera
+            for (let f = 0; f < floors; f++) {
+                for (let c = 0; c < cols; c++) {
+                    if (Math.random() > 0.65) continue;
+                    const wx = (c - (cols-1)/2) * 0.7;
+                    const wy = (f - (floors-1)/2) * 1.2;
+                    const wz = -depth/2 - 0.05;
+                    const windowGeo = new THREE.BoxGeometry(0.25, 0.4, 0.1);
+                    const windowMesh = new THREE.Mesh(windowGeo, Math.random() > 0.7 ? windowMat : windowMatOff);
+                    windowMesh.position.set(wx, wy, wz);
+                    windowMesh.castShadow = false;
+                    building.add(windowMesh);
+                }
+            }
+            // Caras laterales
+            for (let f = 0; f < floors; f++) {
+                for (let r = 0; r < rows; r++) {
+                    if (Math.random() > 0.7) continue;
+                    const wz = (r - (rows-1)/2) * 0.7;
+                    const wy = (f - (floors-1)/2) * 1.2;
+                    // izquierda
+                    const windowGeo = new THREE.BoxGeometry(0.1, 0.4, 0.25);
+                    const windowMeshL = new THREE.Mesh(windowGeo, Math.random() > 0.7 ? windowMat : windowMatOff);
+                    windowMeshL.position.set(-width/2 - 0.05, wy, wz);
+                    building.add(windowMeshL);
+                    // derecha
+                    const windowMeshR = new THREE.Mesh(windowGeo, Math.random() > 0.7 ? windowMat : windowMatOff);
+                    windowMeshR.position.set(width/2 + 0.05, wy, wz);
+                    building.add(windowMeshR);
+                }
+            }
+            
+            // Añadir un pequeño letrero con el nombre del archivo (como una placa)
+            // Usamos un plano con textura de canvas
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(2, 2, canvas.width-4, canvas.height-4);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 16px "Segoe UI"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            // Truncar nombre si es muy largo
+            let displayName = fileData.name;
+            if (displayName.length > 20) displayName = displayName.substring(0, 18) + '…';
+            ctx.fillText(displayName, canvas.width/2, canvas.height/2);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const signMaterial = new THREE.MeshStandardMaterial({ map: texture, emissive: new THREE.Color(0x004466), emissiveIntensity: 0.3 });
+            const signGeo = new THREE.PlaneGeometry(1.2, 0.3);
+            const sign = new THREE.Mesh(signGeo, signMaterial);
+            // Colocar el letrero en la parte frontal superior
+            sign.position.set(0, height/2 - 0.4, depth/2 + 0.15);
+            sign.rotation.y = 0;
+            building.add(sign);
+            
+            // Añadir el edificio al grupo
+            cityGroup.add(building);
+            edificios.push(building);
+            
+            // Añadir un borde de color de manzana en la base? Mejor alrededor de la manzana, pero se hace aparte.
+            
+            return building;
+        }
+
+        // Función para crear un árbol
+        function createTree(posX, posZ) {
+            const treeGroup = new THREE.Group();
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B5A2B });
+            const leafMat = new THREE.MeshStandardMaterial({ color: 0x2E8B57 });
+            
+            const trunkGeo = new THREE.CylinderGeometry(0.2, 0.25, 1.2);
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.castShadow = true;
+            trunk.receiveShadow = true;
+            trunk.position.y = 0.6;
+            treeGroup.add(trunk);
+            
+            const leafGeo = new THREE.SphereGeometry(0.6, 6);
+            const leaf1 = new THREE.Mesh(leafGeo, leafMat);
+            leaf1.castShadow = true;
+            leaf1.receiveShadow = true;
+            leaf1.position.y = 1.4;
+            treeGroup.add(leaf1);
+            const leaf2 = new THREE.Mesh(leafGeo, leafMat);
+            leaf2.castShadow = true;
+            leaf2.receiveShadow = true;
+            leaf2.position.set(0.3, 1.6, 0.2);
+            leaf2.scale.set(0.7, 0.7, 0.7);
+            treeGroup.add(leaf2);
+            const leaf3 = new THREE.Mesh(leafGeo, leafMat);
+            leaf3.castShadow = true;
+            leaf3.receiveShadow = true;
+            leaf3.position.set(-0.3, 1.5, -0.2);
+            leaf3.scale.set(0.8, 0.8, 0.8);
+            treeGroup.add(leaf3);
+            
+            treeGroup.position.set(posX, 0, posZ);
+            return treeGroup;
+        }
+
+        // Función para crear un vehículo simple
+        function createCar(posX, posZ, color = 0xff3333, rotationY = 0) {
+            const carGroup = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: color });
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            
+            const bodyGeo = new THREE.BoxGeometry(1.0, 0.5, 0.6);
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.castShadow = true;
+            body.receiveShadow = true;
+            body.position.y = 0.3;
+            carGroup.add(body);
+            
+            const cabinGeo = new THREE.BoxGeometry(0.5, 0.35, 0.4);
+            const cabinMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+            cabin.castShadow = true;
+            cabin.receiveShadow = true;
+            cabin.position.set(0, 0.65, 0);
+            carGroup.add(cabin);
+            
+            const wheelGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.1, 8);
+            wheelGeo.rotateZ(Math.PI/2);
+            const wheelPositions = [[-0.35, 0.15, 0.3], [0.35, 0.15, 0.3], [-0.35, 0.15, -0.3], [0.35, 0.15, -0.3]];
+            wheelPositions.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                wheel.castShadow = true;
+                wheel.receiveShadow = true;
+                wheel.position.set(pos[0], pos[1], pos[2]);
+                carGroup.add(wheel);
+            });
+            
+            carGroup.position.set(posX, 0, posZ);
+            carGroup.rotation.y = rotationY;
+            return carGroup;
+        }
+
+        // Función para crear un helicóptero
+        function createHelicopter(posX, posY, posZ) {
+            const heliGroup = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xcc3333 });
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            
+            const bodyGeo = new THREE.SphereGeometry(0.8, 8, 6);
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.castShadow = true;
+            body.receiveShadow = true;
+            body.scale.set(1.2, 0.7, 0.9);
+            heliGroup.add(body);
+            
+            const tailGeo = new THREE.BoxGeometry(1.6, 0.2, 0.2);
+            const tail = new THREE.Mesh(tailGeo, darkMat);
+            tail.castShadow = true;
+            tail.receiveShadow = true;
+            tail.position.set(-1.0, 0.1, 0);
+            heliGroup.add(tail);
+            
+            const rotorGeo = new THREE.BoxGeometry(2.0, 0.05, 0.2);
+            const rotor = new THREE.Mesh(rotorGeo, darkMat);
+            rotor.castShadow = true;
+            rotor.receiveShadow = true;
+            rotor.position.set(0, 0.8, 0);
+            heliGroup.add(rotor);
+            const rotor2 = new THREE.Mesh(rotorGeo, darkMat);
+            rotor2.castShadow = true;
+            rotor2.receiveShadow = true;
+            rotor2.position.set(0, 0.8, 0);
+            rotor2.rotation.y = Math.PI/2;
+            heliGroup.add(rotor2);
+            
+            heliGroup.position.set(posX, posY, posZ);
+            return heliGroup;
+        }
+
+        // Función para crear el borde de una manzana (líneas de color)
+        function createManzanaBorder(minX, maxX, minZ, maxZ, color) {
+            const points = [
+                new THREE.Vector3(minX, 0.05, minZ),
+                new THREE.Vector3(maxX, 0.05, minZ),
+                new THREE.Vector3(maxX, 0.05, maxZ),
+                new THREE.Vector3(minX, 0.05, maxZ),
+                new THREE.Vector3(minX, 0.05, minZ)
+            ];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ color: color, linewidth: 2 }); // linewidth no soportado en todos los navegadores
+            const line = new THREE.Line(geometry, material);
+            cityGroup.add(line);
+        }
+
+        // Función principal para generar la ciudad a partir de una ruta simulada
+        function generateCity(ruta) {
+            // Limpiar ciudad anterior
+            while(cityGroup.children.length > 0) {
+                cityGroup.remove(cityGroup.children[0]);
+            }
+            edificios.length = 0;
+            
+            // Simulamos la lectura de archivos desde la ruta
+            // Generamos archivos aleatorios con nombres y tamaños
+            // Para cada manzana, generamos una cantidad de edificios según su tamaño
+            // Cada edificio tendrá un rango (1-10) y un tamaño coherente
+            
+            // Recorremos las manzanas
+            for (let ix = 0; ix < bloquesX; ix++) {
+                for (let iz = 0; iz < bloquesZ; iz++) {
+                    const blockX = blockPositionsX[ix];
+                    const blockZ = blockPositionsZ[iz];
+                    const sizeX = blockX.size;
+                    const sizeZ = blockZ.size;
+                    
+                    // Color de borde de manzana
+                    const manzanaColor = manzanaColors[(ix + iz) % manzanaColors.length];
+                    
+                    // Dibujar borde de la manzana
+                    createManzanaBorder(blockX.start, blockX.end, blockZ.start, blockZ.end, manzanaColor);
+                    
+                    // Generar edificios dentro de la manzana
+                    // Cada edificio ocupa un área de buildingBaseSize x buildingBaseSize
+                    // Posiciones relativas dentro de la manzana
+                    for (let bx = 0; bx < sizeX; bx++) {
+                        for (let bz = 0; bz < sizeZ; bz++) {
+                            // Posición central del edificio
+                            const posX = blockX.start + (bx + 0.5) * buildingBaseSize;
+                            const posZ = blockZ.start + (bz + 0.5) * buildingBaseSize;
+                            
+                            // Generar datos de archivo
+                            // Asignar rango: distribución sesgada para que haya más pequeños que grandes
+                            let rango;
+                            const r = Math.random();
+                            if (r < 0.35) rango = 1;
+                            else if (r < 0.6) rango = 2;
+                            else if (r < 0.78) rango = 3;
+                            else if (r < 0.89) rango = 4;
+                            else if (r < 0.95) rango = 5;
+                            else if (r < 0.98) rango = 6;
+                            else if (r < 0.99) rango = 7;
+                            else if (r < 0.995) rango = 8;
+                            else if (r < 0.999) rango = 9;
+                            else rango = 10;
+                            
+                            const sizeBytes = generateSizeForRange(rango);
+                            const fileName = randomFileName();
+                            
+                            const fileData = {
+                                name: fileName,
+                                size: sizeBytes,
+                                rango: rango
+                            };
+                            
+                            // Crear edificio
+                            const building = createBuilding(posX, posZ, rango, fileData, manzanaColor);
+                            
+                            // Ocasionalmente añadir detalles en la base del edificio (árboles, coches)
+                            // Pero para no sobrecargar, lo hacemos en las calles, no dentro de la manzana.
+                        }
+                    }
+                }
+            }
+            
+            // Añadir calles: ya están implícitas, pero podemos añadir algunas líneas o texturas.
+            // Añadir árboles y vehículos en las calles
+            // Las calles están entre manzanas: 
+            // Calle vertical: entre blockX.end y siguiente blockX.start
+            // Calle horizontal: entre blockZ.end y siguiente blockZ.start
+            
+            // Añadir árboles en las aceras (bordes de las manzanas)
+            for (let ix = 0; ix < bloquesX; ix++) {
+                for (let iz = 0; iz < bloquesZ; iz++) {
+                    const blockX = blockPositionsX[ix];
+                    const blockZ = blockPositionsZ[iz];
+                    // Árboles en las esquinas y a lo largo de los bordes
+                    // Esquina inferior izquierda
+                    if (Math.random() > 0.6) {
+                        const tree = createTree(blockX.start - 0.5, blockZ.start - 0.5);
+                        cityGroup.add(tree);
+                    }
+                    // Esquina inferior derecha
+                    if (Math.random() > 0.6) {
+                        const tree = createTree(blockX.end + 0.5, blockZ.start - 0.5);
+                        cityGroup.add(tree);
+                    }
+                    // Esquina superior izquierda
+                    if (Math.random() > 0.6) {
+                        const tree = createTree(blockX.start - 0.5, blockZ.end + 0.5);
+                        cityGroup.add(tree);
+                    }
+                    // Esquina superior derecha
+                    if (Math.random() > 0.6) {
+                        const tree = createTree(blockX.end + 0.5, blockZ.end + 0.5);
+                        cityGroup.add(tree);
+                    }
+                }
+            }
+            
+            // Añadir vehículos en las calles (posiciones aleatorias en las calles)
+            for (let i = 0; i < 40; i++) {
+                // Elegir una calle al azar
+                const tipo = Math.random() > 0.5 ? 'x' : 'z';
+                let posX, posZ;
+                if (tipo === 'x') {
+                    // Calle horizontal (a lo largo de X)
+                    const iz = Math.floor(Math.random() * (bloquesZ - 1)); // entre manzanas
+                    const zCalle = (blockPositionsZ[iz].end + blockPositionsZ[iz+1].start) / 2;
+                    const xMin = blockPositionsX[0].start;
+                    const xMax = blockPositionsX[bloquesX-1].end;
+                    posX = xMin + Math.random() * (xMax - xMin);
+                    posZ = zCalle + (Math.random() - 0.5) * 1.5;
+                } else {
+                    // Calle vertical (a lo largo de Z)
+                    const ix = Math.floor(Math.random() * (bloquesX - 1));
+                    const xCalle = (blockPositionsX[ix].end + blockPositionsX[ix+1].start) / 2;
+                    const zMin = blockPositionsZ[0].start;
+                    const zMax = blockPositionsZ[bloquesZ-1].end;
+                    posZ = zMin + Math.random() * (zMax - zMin);
+                    posX = xCalle + (Math.random() - 0.5) * 1.5;
+                }
+                const color = new THREE.Color().setHSL(Math.random(), 0.8, 0.5).getHex();
+                const car = createCar(posX, posZ, color, tipo === 'x' ? 0 : Math.PI/2);
+                cityGroup.add(car);
+            }
+            
+            // Añadir algunos helicópteros
+            for (let i = 0; i < 6; i++) {
+                const posX = (Math.random() - 0.5) * 100;
+                const posY = 25 + Math.random() * 30;
+                const posZ = (Math.random() - 0.5) * 100;
+                const heli = createHelicopter(posX, posY, posZ);
+                cityGroup.add(heli);
+            }
+            
+            // Añadir suelo (plano grande)
+            const groundGeo = new THREE.PlaneGeometry(400, 400);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a2b3c, roughness: 0.9, metalness: 0.1 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -0.01;
+            ground.receiveShadow = true;
+            cityGroup.add(ground);
+            
+            // Añadir una rejilla sutil para las calles
+            const gridHelper = new THREE.GridHelper(400, 40, 0x00aaff, 0x335577);
+            gridHelper.position.y = 0;
+            cityGroup.add(gridHelper);
+        }
+
+        // --- Interacción con raycasting ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        renderer.domElement.addEventListener('click', (event) => {
+            // Calcular posición del mouse
+            mouse.x = (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
+            mouse.y = -(event.clientY / renderer.domElement.clientHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            
+            const intersects = raycaster.intersectObjects(edificios);
+            
+            if (intersects.length > 0) {
+                const building = intersects[0].object;
+                if (building.userData && building.userData.isBuilding) {
+                    const data = building.userData;
+                    // Mostrar detalles
+                    document.getElementById('detail-name').textContent = data.fileName;
+                    document.getElementById('detail-rango').textContent = data.rango;
+                    document.getElementById('detail-tamano').textContent = data.sizeFormatted;
+                    document.getElementById('detail-nivel').textContent = `${data.rango} / 10`;
+                    document.getElementById('detail-coords').textContent = data.coords;
+                    document.getElementById('file-detail').style.display = 'block';
+                    
+                    // Ocultar después de 5 segundos
+                    clearTimeout(window.detailTimeout);
+                    window.detailTimeout = setTimeout(() => {
+                        document.getElementById('file-detail').style.display = 'none';
+                    }, 5000);
+                }
+            } else {
+                // Ocultar si se hace click en el vacío
+                // document.getElementById('file-detail').style.display = 'none';
+            }
+        });
+
+        // --- Animación ---
+        let clock = new THREE.Clock();
+
+        function animate() {
+            const delta = clock.getDelta();
+            const elapsedTime = performance.now() * 0.001;
+            
+            // Animar helicópteros (rotación de rotores)
+            cityGroup.children.forEach(child => {
+                if (child.isGroup && child.children.length > 0) {
+                    // Detectar helicópteros por estructura simple
+                    if (child.children.some(c => c.geometry && c.geometry.type === 'BoxGeometry' && c.scale.x > 1.5)) {
+                        // Rotar rotores
+                        child.children.forEach(c => {
+                            if (c.geometry && c.geometry.type === 'BoxGeometry' && c.position.y > 0.7) {
+                                c.rotation.y += 0.2;
+                            }
+                        });
+                        // Pequeño movimiento
+                        child.position.y += Math.sin(elapsedTime * 2 + child.position.x) * 0.005;
+                    }
+                }
+            });
+            
+            controls.update();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+
+        // --- Redimensionar ventana ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- Botón de carga ---
+        document.getElementById('cargarBtn').addEventListener('click', () => {
+            const ruta = document.getElementById('rutaInput').value.trim() || '/';
+            document.getElementById('status').textContent = 'Generando ciudad...';
+            
+            // Simular carga asíncrona
+            setTimeout(() => {
+                generateCity(ruta);
+                document.getElementById('status').textContent = `Ciudad generada: ${edificios.length} archivos`;
+                // Ajustar cámara para ver la ciudad
+                controls.target.set(0, 15, 0);
+                camera.position.set(70, 80, 120);
+                controls.update();
+            }, 100);
+        });
+
+        // Generar ciudad inicial con ruta por defecto
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                generateCity('/datos/archivos');
+                document.getElementById('status').textContent = `Ciudad generada: ${edificios.length} archivos`;
+            }, 200);
+        });
+
+        // Deshabilitar autoRotate al interactuar
+        renderer.domElement.addEventListener('mousedown', () => {
+            controls.autoRotate = false;
+        });
+        renderer.domElement.addEventListener('mouseup', () => {
+            // Reactivar después de un tiempo
+            setTimeout(() => {
+                if (!controls.autoRotate) controls.autoRotate = true;
+            }, 5000);
+        });
+        // Mantener autoRotate si no hay interacción
+        setInterval(() => {
+            if (!controls.autoRotate) {
+                controls.autoRotate = true;
+            }
+        }, 15000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Ciudad de Archivos 3D</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #infoPanel {
+      position: absolute;
+      top: 10px; left: 10px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+      max-width: 300px;
+    }
+    #rutaInput {
+      width: 100%;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="infoPanel">
+    <h3>Visualización de Archivos</h3>
+    <label>Ruta de carpeta:</label>
+    <input type="text" id="rutaInput" placeholder="Ej: C:/MisArchivos" />
+    <button onclick="generarCiudad()">Generar Ciudad</button>
+    <div id="detallesArchivo"></div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+  <script>
+    let scene, camera, renderer, controls, raycaster, mouse;
+    let edificios = [];
+
+    init();
+
+    function init() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x87ceeb); // cielo azul
+
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+      camera.position.set(20, 30, 40);
+
+      renderer = new THREE.WebGLRenderer({antialias:true});
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+      // Luz solar
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(50, 100, 50);
+      scene.add(light);
+      scene.add(new THREE.AmbientLight(0x404040));
+
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+
+      window.addEventListener('click', onClick);
+
+      animate();
+    }
+
+    function rangoAltura(sizeMb) {
+      if (sizeMb <= 1) return 1 + Math.random()*0.3;
+      if (sizeMb <= 5) return 2 + Math.random()*0.3;
+      if (sizeMb <= 50) return 3 + Math.random()*0.3;
+      if (sizeMb <= 500) return 4 + Math.random()*0.3;
+      if (sizeMb <= 1000*1024) return 5 + Math.random()*0.3;
+      return 6 + Math.random()*0.3;
+    }
+
+    function generarCiudad() {
+      // Limpia escena
+      edificios.forEach(e => scene.remove(e));
+      edificios = [];
+
+      // Ejemplo: simular archivos con tamaños aleatorios
+      let cuadrasX = 4; // número de cuadras en X
+      let cuadrasY = 4; // número de cuadras en Y
+      let espacio = 12;
+
+      for (let cx=0; cx<cuadrasX; cx++) {
+        for (let cy=0; cy<cuadrasY; cy++) {
+          let ladoX = 4 + Math.floor(Math.random()*5); // entre 4 y 8
+          let ladoY = 4 + Math.floor(Math.random()*5);
+
+          for (let i=0; i<ladoX; i++) {
+            for (let j=0; j<ladoY; j++) {
+              let sizeMb = Math.random()*1000; // tamaño simulado
+              let altura = rangoAltura(sizeMb);
+
+              let geometry = new THREE.BoxGeometry(1, altura, 1);
+              let material = new THREE.MeshLambertMaterial({color: new THREE.Color(`hsl(${Math.random()*360},50%,50%)`)});
+              let edificio = new THREE.Mesh(geometry, material);
+
+              edificio.position.set(cx*espacio + i*2, altura/2, cy*espacio + j*2);
+              edificio.userData = {nombre:`Archivo_${cx}_${cy}_${i}_${j}`, size:sizeMb.toFixed(2)+" MB"};
+              scene.add(edificio);
+              edificios.push(edificio);
+            }
+          }
+        }
+      }
+
+      // Agregar algunos árboles y vehículos
+      for (let t=0; t<20; t++) {
+        let treeGeo = new THREE.ConeGeometry(0.5, 2, 8);
+        let treeMat = new THREE.MeshLambertMaterial({color:0x228B22});
+        let tree = new THREE.Mesh(treeGeo, treeMat);
+        tree.position.set(Math.random()*cuadrasX*espacio, 1, Math.random()*cuadrasY*espacio);
+        scene.add(tree);
+      }
+
+      for (let v=0; v<10; v++) {
+        let carGeo = new THREE.BoxGeometry(1.5, 0.5, 0.8);
+        let carMat = new THREE.MeshLambertMaterial({color:0xff0000});
+        let car = new THREE.Mesh(carGeo, carMat);
+        car.position.set(Math.random()*cuadrasX*espacio, 0.25, Math.random()*cuadrasY*espacio);
+        scene.add(car);
+      }
+
+      // Helicóptero
+      let heliGeo = new THREE.BoxGeometry(2,1,1);
+      let heliMat = new THREE.MeshLambertMaterial({color:0x0000ff});
+      let heli = new THREE.Mesh(heliGeo, heliMat);
+      heli.position.set(10,10,10);
+      scene.add(heli);
+    }
+
+    function onClick(event) {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(edificios);
+      if (intersects.length > 0) {
+        let data = intersects[0].object.userData;
+        document.getElementById("detallesArchivo").innerHTML =
+          `<strong>${data.nombre}</strong><br/>Tamaño: ${data.size}`;
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+  </script>
+</body>
+</html>

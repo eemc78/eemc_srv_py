@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servidor desde el celucar con python3</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .product-card:hover img { transform: scale(1.05); }
+        .cart-active { transform: translateX(0) !important; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <header class="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b">
+        <div class="container mx-auto px-4 h-20 flex items-center justify-between">
+            <a href="/" class="text-2xl font-black text-indigo-600 tracking-tighter">eemc78 servidor</a>
+            
+            <div class="hidden md:flex flex-1 mx-12">
+                <form action="/" class="w-full relative">
+                    <input type="text" name="search" placeholder="O que você está procurando?" 
+                           class="w-full bg-gray-100 border-none rounded-full py-2.5 px-11 focus:ring-2 focus:ring-indigo-500 transition">
+                    <i class="fa fa-search absolute left-4 top-3.5 text-gray-400"></i>
+                </form>
+            </div>
+
+            <!-- <button onclick="toggleCart()" class="relative p-2 hover:bg-gray-100 rounded-full transition">
+                <i class="fa-solid fa-cart-shopping text-xl"></i>
+                <span id="cart-count" class="absolute top-0 right-0 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">0</span>
+            </button> -->
+        </div>
+    </header>
+
+    <div class="bg-indigo-600 text-white py-4 text-center text-sm font-bold tracking-wide">
+        🚚 Regalos gratis cuando la compra supere  los $200
+    </div>
+
+    <div class="bg-white border-b overflow-x-auto">
+        <div class="container mx-auto px-4 py-3 flex gap-4 text-sm font-semibold whitespace-nowrap">
+            <a href="/" class="px-4 py-2 rounded-full bg-gray-100 hover:bg-indigo-100 transition">Todos</a>
+            <a href="/?category=electronics" class="px-4 py-2 rounded-full bg-gray-100 hover:bg-indigo-100 transition">Eletrónicos</a>
+            <a href="/?category=jewelery" class="px-4 py-2 rounded-full bg-gray-100 hover:bg-indigo-100 transition">Joyas</a>
+            <a href="/?category=men's clothing" class="px-4 py-2 rounded-full bg-gray-100 hover:bg-indigo-100 transition">Masculino</a>
+            <a href="/?category=women's clothing" class="px-4 py-2 rounded-full bg-gray-100 hover:bg-indigo-100 transition">Femenino</a>
+        </div>
+    </div>
+
+    <main class="container mx-auto px-4 py-10">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            <!-- {% for product in products %} -->
+            <div  class="product-card bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group transition-all duration-300 hover:shadow-xl">
+                <div class="relative h-64 p-8 bg-white overflow-hidden">
+                    <img src=" product.image " alt=" product.name" class="w-full h-full object-contain transition-transform duration-500">
+                    <!-- {% if product.old_price %} -->
+                    <span class="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded">PROMO</span>
+                    <!-- {% endif %} -->
+                </div>
+                <!-- <div class="p-6 border-t">
+                    <span class="text-[10px] uppercase tracking-widest text-gray-400 font-bold">{{ product.category }}</span>
+                    <h3 class="font-bold text-gray-800 mt-1 mb-4 h-12 overflow-hidden line-clamp-2">{{ product.name }}</h3>
+                    <div class="flex items-center gap-3 mb-6">
+                        <span class="text-2xl font-black text-indigo-600">R$ {{ "%.2f"|format(product.price) }}</span>
+                        {% if product.old_price %}
+                        <span class="text-sm text-gray-400 line-through">R$ {{ "%.2f"|format(product.old_price) }}</span>
+                        {% endif %}
+                    </div>
+                    <button onclick="addToCart('{{ product.name }}', {{ product.price }}, '{{ product.image }}')" 
+                            class="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-indigo-600 transition flex items-center justify-center gap-2">
+                        <i class="fa fa-shopping-bag text-sm"></i> Comprar
+                    </button>
+                </div> -->
+            </div>
+            <!-- {% endfor %} -->
+        </div>
+    </main>
+
+    <div id="cart-sidebar" class="fixed inset-y-0 right-0 w-full max-w-sm bg-white shadow-2xl z-[100] translate-x-full transition-transform duration-500 ease-in-out flex flex-col">
+        <div class="p-6 border-b flex justify-between items-center">
+            <h2 class="text-xl font-black italic">RESUMEN</h2>
+            <!-- <button onclick="toggleCart()" class="text-2xl">&times;</button> -->
+        </div>
+        <div id="cart-items" class="flex-1 overflow-y-auto p-6 space-y-6"></div>
+        <div class="p-6 border-t bg-gray-50">
+            <div class="flex justify-between items-center mb-6">
+                <span class="text-gray-500 font-medium">Subtotal</span>
+                <span id="cart-total" class="text-2xl font-black text-indigo-600">R$ 0,00</span>
+            </div>
+            <button class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">
+                FINALIZAR PEDIDO
+            </button>
+        </div>
+    </div>
+
+    <!-- <script>
+        let cart = JSON.parse(localStorage.getItem('fake_cart')) || [];
+
+        function toggleCart() {
+            document.getElementById('cart-sidebar').classList.toggle('cart-active');
+        }
+
+        function addToCart(name, price, image) {
+            const index = cart.findIndex(i => i.name === name);
+            if(index > -1) cart[index].qty++;
+            else cart.push({ name, price, image, qty: 1 });
+            updateCart();
+            if(!document.getElementById('cart-sidebar').classList.contains('cart-active')) toggleCart();
+        }
+
+        function updateCart() {
+            const container = document.getElementById('cart-items');
+            const totalEl = document.getElementById('cart-total');
+            const countEl = document.getElementById('cart-count');
+            
+            localStorage.setItem('fake_cart', JSON.stringify(cart));
+            container.innerHTML = '';
+            let total = 0;
+            let count = 0;
+
+            cart.forEach((item, idx) => {
+                total += item.price * item.qty;
+                count += item.qty;
+                container.innerHTML += `
+                    <div class="flex gap-4 group">
+                        <div class="w-20 h-20 bg-white border rounded-lg p-2 shrink-0">
+                            <img src="${item.image}" class="w-full h-full object-contain">
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="text-sm font-bold line-clamp-1">${item.name}</h4>
+                            <p class="text-xs text-indigo-600 font-bold mt-1">${item.qty}x R$ ${item.price.toFixed(2)}</p>
+                            <button onclick="remove(${idx})" class="text-[10px] text-red-500 font-bold mt-2 uppercase tracking-tighter hover:underline">Remover</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            totalEl.innerText = `R$ ${total.toFixed(2)}`;
+            countEl.innerText = count;
+        }
+
+        function remove(idx) {
+            cart.splice(idx, 1);
+            updateCart();
+        }
+
+        updateCart();
+    </script> -->
+</body>
+</html>
